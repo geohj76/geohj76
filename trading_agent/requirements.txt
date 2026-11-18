@@ -1,0 +1,7 @@
+requests
+pandas
+numpy
+pytest
+# Only needed for --vision (Claude looking at your screen):
+anthropic
+mss
