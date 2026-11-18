@@ -9,7 +9,11 @@ class Config:
     bar: str = "1H"                 # candle size. 1H tested best on real data (1m/15m lost money)
     poll_seconds: int = 30          # how often the agent checks for new prices
 
-    # --- Strategy (EMA trend-following with ATR stops) ---
+    # --- Which strategy to run ---
+    strategy: str = "ema_cross"     # "ema_cross" (trend following) or "mean_reversion"
+    max_hold_bars: int = 0          # time stop: close a trade after this many candles (0 = off)
+
+    # --- Strategy A: EMA crossover trend-following with ATR stops ---
     fast_ema: int = 9
     slow_ema: int = 21
     atr_period: int = 14
@@ -36,6 +40,21 @@ class Config:
     use_breakeven_stop: bool = False
     breakeven_trigger_atr: float = 1.0
     # (3. Slower timeframe = change `bar` above, e.g. "15m" or "1H".)
+    # Filters 1b (volatility) and 2 (200 EMA trend) also apply to mean reversion.
+
+    # --- Strategy B: mean reversion (Bollinger Bands + RSI) ---
+    # Buy when price is stretched far BELOW its 20-candle average and RSI says oversold;
+    # sell short when stretched far ABOVE and overbought. Take profit back at the average.
+    bb_period: int = 20
+    bb_std: float = 2.0             # band width in standard deviations
+    rsi_period: int = 14
+    rsi_low: float = 30.0           # oversold
+    rsi_high: float = 70.0          # overbought
+    mr_stop_atr_mult: float = 1.5   # stop-loss distance beyond entry
+    # Mean-reversion switches:
+    use_range_filter: bool = False  # only trade when ADX is LOW (sideways market)
+    range_adx_max: float = 25.0
+    use_reentry_confirm: bool = False  # wait for a candle to close back inside the band
 
     # --- Risk limits (the most important section) ---
     starting_balance: float = 100.0
@@ -48,7 +67,6 @@ class Config:
     # --- Screen vision (optional) ---
     use_vision: bool = False        # turn on to have Claude look at your chart
     vision_model: str = "claude-opus-5-5"
-    vision_every_n_polls: int = 10  # screenshots cost money; don't send every poll
     monitor_index: int = 1          # 1 = main monitor
 
     # --- Safety ---

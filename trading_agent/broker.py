@@ -18,6 +18,7 @@ class Position:
     stop: float
     take_profit: float
     breakeven_at: float | None = None  # once price reaches this, stop moves to entry
+    bars_held: int = 0
 
 
 class PaperBroker:
@@ -61,6 +62,7 @@ class PaperBroker:
         p = self.position
         if not p:
             return None
+        p.bars_held += 1
         if p.side == "long":
             if low <= p.stop:
                 return self.close(p.stop, ts, "breakeven" if p.stop == p.entry else "stop")

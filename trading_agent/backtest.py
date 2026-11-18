@@ -26,6 +26,8 @@ def run_backtest(df: pd.DataFrame, cfg: Config, log_file: str | None = None) -> 
     for i in range(warmup, len(df)):
         bar = df.iloc[i]
         broker.check_exits(bar["high"], bar["low"], bar["ts"])
+        if broker.position and cfg.max_hold_bars and broker.position.bars_held >= cfg.max_hold_bars:
+            broker.close(bar["close"], bar["ts"], "time")
         equity = broker.equity(bar["close"])
         equity_curve.append(equity)
 

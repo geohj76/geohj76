@@ -42,17 +42,23 @@ def main():
     if cfg.use_vision:
         from vision import ChartVision, vision_allows
         vision = ChartVision(cfg.vision_model, cfg.monitor_index)
-    last_read = {"bias": "neutral", "confidence": 0.0, "notes": ""}
-    poll = 0
+    last_bar_ts = None
 
-    print(f"Paper-trading {cfg.symbol} on {cfg.bar} candles with ${cfg.starting_balance:.2f} fake money.")
+    print(f"Paper-trading {cfg.symbol} on {cfg.bar} candles ({cfg.strategy}) "
+          f"with ${cfg.starting_balance:.2f} fake money.")
     print("Open dashboard.html in your browser to watch it live.")
     while True:
         try:
             df = fetch_candles(cfg.symbol, cfg.bar, limit=400)
             closed = df.iloc[:-1]  # the newest candle is still forming; ignore it
             bar = closed.iloc[-1]
-            broker.check_exits(bar["high"], bar["low"], bar["ts"])
+            new_bar = bar["ts"] != last_bar_ts  # only act once per finished candle
+            last_bar_ts = bar["ts"]
+            if new_bar:
+                broker.check_exits(bar["high"], bar["low"], bar["ts"])
+                pos = broker.position
+                if pos and cfg.max_hold_bars and pos.bars_held >= cfg.max_hold_bars:
+                    broker.close(float(bar["close"]), bar["ts"], "time")
             equity = broker.equity(float(df["close"].iloc[-1]))
 
             if not risk.can_trade(equity):
@@ -61,16 +67,15 @@ def main():
                 print(f"HALTED: {risk.halted_reason}. Equity ${equity:.2f}")
                 if risk.halted_reason.startswith("max drawdown"):
                     break
-            else:
-                if vision and poll % cfg.vision_every_n_polls == 0:
-                    last_read = vision.analyze(cfg.symbol)
-                    print(f"  Claude sees: {last_read['bias']} ({last_read['confidence']:.0%}) - {last_read['notes']}")
-
+            elif new_bar:
                 sig = generate_signal(closed, cfg)
                 if sig.reason.startswith("filtered"):
                     print(f"  signal skipped - {sig.reason}")
                 if not broker.position and sig.side != "none":
-                    if vision and not vision_allows(sig.side, last_read):
+                    read = vision.analyze(cfg.symbol) if vision else None  # look only when it matters
+                    if read:
+                        print(f"  Claude sees: {read['bias']} ({read['confidence']:.0%}) - {read['notes']}")
+                    if read and not vision_allows(sig.side, read):
                         print(f"  {sig.side} signal vetoed by chart read")
                     else:
                         qty = risk.position_size(equity, sig.price, sig.stop)
@@ -87,7 +92,6 @@ def main():
             raise
         except Exception as e:  # network blips etc. - keep running
             print(f"  error: {e}")
-        poll += 1
         time.sleep(cfg.poll_seconds)
 
 

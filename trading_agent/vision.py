@@ -1,7 +1,7 @@
 """Screen vision: screenshot your chart and ask Claude what it sees.
 
 Claude's read is used ONLY as a filter (it can veto a trade, never start one).
-Each screenshot costs a few cents of API usage, so it runs every N polls.
+Each screenshot costs a few cents of API usage, so it only runs when a trade signal appears.
 
 Needs: `pip install anthropic mss` and an Anthropic API key
 (`export ANTHROPIC_API_KEY=...` or `ant auth login`).

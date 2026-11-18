@@ -1,10 +1,16 @@
-"""EMA crossover trend-following strategy with ATR-based stops and optional filters.
+"""Trading strategies. Pick one with `strategy` in config.py.
 
-Plain English:
-  - When the fast average crosses ABOVE the slow average -> price is trending up -> go LONG.
-  - When it crosses BELOW -> trending down -> go SHORT.
+A) "ema_cross" - trend following:
+  - Fast average crosses ABOVE the slow average -> trending up -> go LONG.
+  - Crosses BELOW -> trending down -> go SHORT.
   - Stop-loss and take-profit distances scale with volatility (ATR).
-  - Optional filters (switched on/off in config.py) skip the weaker signals.
+
+B) "mean_reversion" - fade the stretch:
+  - Price closes below the lower Bollinger Band AND RSI is oversold -> go LONG.
+  - Price closes above the upper band AND RSI is overbought -> go SHORT.
+  - Take profit at the middle band (the 20-candle average); stop beyond entry by ATR.
+
+Optional filters (switched on/off in config.py) skip the weaker signals.
 """
 from __future__ import annotations
 
@@ -42,12 +48,25 @@ def add_indicators(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     df["adx"] = dx.ewm(alpha=alpha, adjust=False).mean()
 
     df["vol_avg"] = df["volume"].rolling(cfg.volume_period).mean()
+
+    # Bollinger Bands
+    df["bb_mid"] = close.rolling(cfg.bb_period).mean()
+    sd = close.rolling(cfg.bb_period).std()
+    df["bb_upper"] = df["bb_mid"] + cfg.bb_std * sd
+    df["bb_lower"] = df["bb_mid"] - cfg.bb_std * sd
+
+    # RSI (Wilder): 0-100, below 30 = oversold, above 70 = overbought
+    delta = close.diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / cfg.rsi_period, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / cfg.rsi_period, adjust=False).mean()
+    df["rsi"] = 100 - 100 / (1 + gain / loss.replace(0, np.nan))
+    df.loc[loss == 0, "rsi"] = 100.0
     return df
 
 
 def warmup_bars(cfg: Config) -> int:
     """How many candles the indicators need before signals are trustworthy."""
-    need = max(cfg.slow_ema, 3 * cfg.adx_period, cfg.volume_period)
+    need = max(cfg.slow_ema, 3 * cfg.adx_period, cfg.volume_period, cfg.bb_period, 3 * cfg.rsi_period)
     if cfg.use_trend_filter:
         need = max(need, cfg.trend_ema)
     if cfg.use_volatility_filter:
@@ -76,6 +95,66 @@ def _crossover(df: pd.DataFrame, i: int) -> str:
 
 def signal_at(df: pd.DataFrame, i: int, cfg: Config) -> Signal:
     """Signal for candle i of a DataFrame that already has indicators."""
+    if cfg.strategy == "mean_reversion":
+        return _mean_reversion_signal(df, i, cfg)
+    if cfg.strategy != "ema_cross":
+        raise ValueError(f"unknown strategy {cfg.strategy!r}")
+    return _ema_cross_signal(df, i, cfg)
+
+
+def _shared_filters(side: str, last, cfg: Config) -> str:
+    """Filters that work for any strategy. Returns a reason if the signal should be skipped."""
+    if cfg.use_volatility_filter and not (last["atr"] >= cfg.min_atr_ratio * last["atr_typical"]):
+        return "filtered: volatility too low"
+    if cfg.use_trend_filter:
+        if (side == "long" and last["close"] < last["ema_trend"]) or \
+           (side == "short" and last["close"] > last["ema_trend"]):
+            return f"filtered: against the {cfg.trend_ema} EMA trend"
+    return ""
+
+
+def _mean_reversion_signal(df: pd.DataFrame, i: int, cfg: Config) -> Signal:
+    last = df.iloc[i]
+    price, atr = float(last["close"]), float(last["atr"])
+    if i < 2 or pd.isna(atr) or pd.isna(last["bb_mid"]) or pd.isna(last["rsi"]):
+        return Signal("none", price, reason="not enough data")
+
+    if cfg.use_reentry_confirm:
+        # Previous candle was stretched outside the band; this one closed back inside.
+        prev = df.iloc[i - 1]
+        if prev["close"] < prev["bb_lower"] and prev["rsi"] < cfg.rsi_low and price > last["bb_lower"]:
+            side = "long"
+        elif prev["close"] > prev["bb_upper"] and prev["rsi"] > cfg.rsi_high and price < last["bb_upper"]:
+            side = "short"
+        else:
+            return Signal("none", price, reason="no stretch")
+    else:
+        if price < last["bb_lower"] and last["rsi"] < cfg.rsi_low:
+            side = "long"
+        elif price > last["bb_upper"] and last["rsi"] > cfg.rsi_high:
+            side = "short"
+        else:
+            return Signal("none", price, reason="no stretch")
+
+    if cfg.use_range_filter and not (last["adx"] <= cfg.range_adx_max):
+        return Signal("none", price, reason=f"filtered: market trending (ADX {last['adx']:.0f})")
+    reason = _shared_filters(side, last, cfg)
+    if reason:
+        return Signal("none", price, reason=reason)
+
+    target = float(last["bb_mid"])
+    sign = 1 if side == "long" else -1
+    if sign * (target - price) < 4 * cfg.fee_rate * price:  # gain must cover fees twice over
+        return Signal("none", price, reason="filtered: target too close to cover fees")
+    return Signal(
+        side, price,
+        stop=price - sign * cfg.mr_stop_atr_mult * atr,
+        take_profit=target,
+        reason=f"price stretched {'below' if side == 'long' else 'above'} band, RSI {last['rsi']:.0f}",
+    )
+
+
+def _ema_cross_signal(df: pd.DataFrame, i: int, cfg: Config) -> Signal:
     last = df.iloc[i]
     price, atr = float(last["close"]), float(last["atr"])
     if i < 2 or pd.isna(atr):
@@ -95,11 +174,9 @@ def signal_at(df: pd.DataFrame, i: int, cfg: Config) -> Signal:
 
     if cfg.use_adx_filter and not (last["adx"] >= cfg.adx_min):
         return Signal("none", price, reason=f"filtered: choppy (ADX {last['adx']:.0f})")
-    if cfg.use_volatility_filter and not (atr >= cfg.min_atr_ratio * last["atr_typical"]):
-        return Signal("none", price, reason="filtered: volatility too low")
-    if cfg.use_trend_filter:
-        if (side == "long" and price < last["ema_trend"]) or (side == "short" and price > last["ema_trend"]):
-            return Signal("none", price, reason=f"filtered: against the {cfg.trend_ema} EMA trend")
+    reason = _shared_filters(side, last, cfg)
+    if reason:
+        return Signal("none", price, reason=reason)
     if cfg.use_volume_filter:
         bar = df.iloc[i - 1] if cfg.use_confirmation else last  # the crossover candle
         if not (bar["volume"] > bar["vol_avg"]):
@@ -119,6 +196,6 @@ def signal_at(df: pd.DataFrame, i: int, cfg: Config) -> Signal:
 def generate_signal(df: pd.DataFrame, cfg: Config) -> Signal:
     """Signal for the latest closed candle (used by the live agent)."""
     df = add_indicators(df, cfg)
-    if len(df) < cfg.slow_ema + 2:
+    if len(df) < warmup_bars(cfg):
         return Signal("none", float(df["close"].iloc[-1]), reason="not enough data")
     return signal_at(df, len(df) - 1, cfg)

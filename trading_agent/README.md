@@ -27,6 +27,28 @@ python backtest.py              # backtest on the last day of real BTC data
 python agent.py                 # start paper trading with live prices
 ```
 
+## Strategies
+
+Pick one with `strategy` in `config.py`:
+
+| `strategy` | Idea |
+|---|---|
+| `"ema_cross"` (default) | Trend following: buy when the fast average crosses above the slow one |
+| `"mean_reversion"` | Fade the stretch: buy when price drops below the lower Bollinger Band with RSI oversold, take profit back at the 20-candle average |
+
+Mean-reversion switches: `use_range_filter` (only trade sideways markets), `use_reentry_confirm`
+(wait for a candle to close back inside the band), plus `bb_std`, `rsi_low`/`rsi_high`,
+`mr_stop_atr_mult` and `max_hold_bars` (time stop).
+
+```bash
+python compare.py --strategy mean_reversion --bar 4H --candles 9000
+```
+
+Best result so far (real BloFin data, Jan 2023 – Nov 2026, 4H candles): mean reversion with
+`use_reentry_confirm = True` was the only setup positive in both halves with 30+ trades each
+(+3.5% / 116 trades, then +10.1% / 48 trades). Many variants were tested, so treat it as a lead
+to paper trade, not a proven edge.
+
 ## Filters (on/off switches)
 
 All in `config.py`. Defaults: **1H candles with the volatility filter on**, everything else off.
@@ -71,8 +93,7 @@ It reloads itself every 30 seconds. Hover over the chart to see your balance aft
 2. Open your BloFin chart full-screen on your main monitor.
 3. Run `python agent.py --vision`
 
-Each screenshot costs a few cents, so the agent only looks every 10 polls (about 5 minutes).
-Change `vision_every_n_polls` in `config.py`.
+Each screenshot costs a few cents, so the agent only looks when the strategy wants to open a trade.
 
 ## Rules before ever using real money
 

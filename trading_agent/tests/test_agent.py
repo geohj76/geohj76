@@ -103,3 +103,22 @@ def test_breakeven_stop_moves_to_entry():
     assert b.position.stop == 60000
     pnl = b.check_exits(high=60100, low=59900)
     assert pnl == 0.0 and b.trades[-1]["exit"] == 60000
+
+
+def test_mean_reversion_signals_and_time_stop():
+    from dataclasses import replace
+    from strategy import add_indicators, signal_at
+    cfg = replace(Config(), strategy="mean_reversion", use_volatility_filter=False)
+    df = synthetic_candles(1500)
+    ind = add_indicators(df, cfg)
+    assert ind["rsi"].dropna().between(0, 100).all()
+    sigs = [signal_at(ind, i, cfg) for i in range(100, len(ind))]
+    taken = [s for s in sigs if s.side != "none"]
+    assert taken
+    for s in taken:  # target is the middle band: above entry for longs, below for shorts
+        if s.side == "long":
+            assert s.stop < s.price < s.take_profit
+        else:
+            assert s.take_profit < s.price < s.stop
+    r = run_backtest(df, replace(cfg, max_hold_bars=10))
+    assert r["trades"] > 0
