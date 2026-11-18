@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class Config:
     # --- Market ---
     symbol: str = "BTC-USDT"        # BloFin instrument id (perpetual futures)
-    bar: str = "1m"                 # candle size: 1m, 5m, 15m, 1H ...
+    bar: str = "1H"                 # candle size. 1H tested best on real data (1m/15m lost money)
     poll_seconds: int = 30          # how often the agent checks for new prices
 
     # --- Strategy (EMA trend-following with ATR stops) ---
@@ -22,7 +22,7 @@ class Config:
     adx_period: int = 14
     adx_min: float = 20.0
     # 1b. Skip dead markets: only trade when volatility is at least normal.
-    use_volatility_filter: bool = False
+    use_volatility_filter: bool = True   # ON for paper testing. Helped Jun-Nov 2026, NOT Sep 2025-Jun 2026: unproven
     min_atr_ratio: float = 0.8      # ATR must be >= 80% of its recent typical level
     # 2. Only trade with the bigger trend (longs above the 200 EMA, shorts below).
     use_trend_filter: bool = False

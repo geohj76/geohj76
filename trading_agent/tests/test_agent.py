@@ -79,11 +79,20 @@ def test_dashboard_builds(tmp_path):
 def test_filters_only_remove_trades_and_adx_in_range():
     from dataclasses import replace
     from strategy import add_indicators
+    from strategy import signal_at
     df = synthetic_candles(1500)
-    base = run_backtest(df, Config())["trades"]
+    off = replace(Config(), use_adx_filter=False, use_volatility_filter=False, use_trend_filter=False,
+                  use_volume_filter=False, use_confirmation=False, use_breakeven_stop=False)
+    ind = add_indicators(df, off)
+
+    def n_signals(cfg):
+        return sum(signal_at(ind, i, cfg).side != "none" for i in range(250, len(ind)))
+
+    base = n_signals(off)
+    assert base > 0
     for switch in ["use_adx_filter", "use_trend_filter", "use_volume_filter", "use_volatility_filter"]:
-        assert run_backtest(df, replace(Config(), **{switch: True}))["trades"] <= base
-    adx = add_indicators(df, Config())["adx"].dropna()
+        assert n_signals(replace(off, **{switch: True})) <= base  # a filter never ADDS signals
+    adx = ind["adx"].dropna()
     assert adx.between(0, 100).all()
 
 

@@ -1,7 +1,7 @@
 """Compare the strategy with each filter switched on, one at a time.
 
-    python compare.py                      # real BloFin BTC-USDT 1m history (needs internet)
-    python compare.py --bar 15m            # try a slower timeframe
+    python compare.py                      # real BloFin BTC-USDT history, 1H candles (needs internet)
+    python compare.py --bar 15m            # try another timeframe
     python compare.py --candles 20000      # more history
     python compare.py --synthetic          # fake data, just to check it runs
 
@@ -61,12 +61,15 @@ def fmt(r: dict) -> str:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--synthetic", action="store_true")
-    ap.add_argument("--bar", default=Config().bar)
+    ap.add_argument("--bar", default=Config().bar)  # 1H by default
     ap.add_argument("--candles", type=int, default=10000)
     ap.add_argument("--refresh", action="store_true", help="re-download history")
     args = ap.parse_args()
 
-    base = replace(Config(), bar=args.bar)
+    # Start every variant from "all filters off" so the baseline really is the baseline.
+    base = replace(Config(), bar=args.bar, use_adx_filter=False, use_volatility_filter=False,
+                   use_trend_filter=False, use_confirmation=False, use_volume_filter=False,
+                   use_breakeven_stop=False)
     df = load_data(args, base)
     split = int(len(df) * 0.7)
     tune, check = df.iloc[:split].reset_index(drop=True), df.iloc[split:].reset_index(drop=True)

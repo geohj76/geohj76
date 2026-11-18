@@ -29,7 +29,13 @@ python agent.py                 # start paper trading with live prices
 
 ## Filters (on/off switches)
 
-All in `config.py`, all **off** by default. Set one to `True` to turn it on.
+All in `config.py`. Defaults: **1H candles with the volatility filter on**, everything else off.
+
+Results on real BloFin BTC-USDT data (Nov 2026):
+- 1m and 15m candles lost money with every filter. 1H was far better.
+- On Sep 2025 – Nov 2026 1H data, **no filter beat the baseline in both halves.** The volatility
+  and ADX filters helped a lot in the recent ~4 months but slightly hurt in the 10 months before.
+- The volatility filter is on as an experiment for paper trading, not because it's proven.
 
 | Switch | What it does |
 |---|---|
@@ -39,13 +45,13 @@ All in `config.py`, all **off** by default. Set one to `True` to turn it on.
 | `use_confirmation` | Waits one more candle to confirm the crossover held |
 | `use_volume_filter` | Only trades crossovers with above-average volume |
 | `use_breakeven_stop` | Moves the stop to the entry price once a trade is 1 ATR in profit |
-| `bar` | Timeframe, e.g. `"15m"` or `"1H"` instead of `"1m"` |
+| `bar` | Timeframe: `"1m"`, `"15m"`, `"1H"` (default), `"4H"` |
 
 Before switching anything on, compare them on real data:
 
 ```bash
-python compare.py               # real BloFin history, 1m candles
-python compare.py --bar 15m     # try a slower timeframe
+python compare.py               # real BloFin history, 1H candles
+python compare.py --bar 15m     # try another timeframe
 ```
 
 It splits the history into TUNE (first 70%) and CHECK (last 30%). Only trust a filter
