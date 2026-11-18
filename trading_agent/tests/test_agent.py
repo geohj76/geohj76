@@ -74,3 +74,23 @@ def test_dashboard_builds(tmp_path):
     # Empty log still renders
     empty = write_dashboard(str(tmp_path / "missing.csv"), str(tmp_path / "e.html"), 100.0)
     assert "No closed trades yet" in open(empty).read()
+
+
+def test_filters_only_remove_trades_and_adx_in_range():
+    from dataclasses import replace
+    from strategy import add_indicators
+    df = synthetic_candles(1500)
+    base = run_backtest(df, Config())["trades"]
+    for switch in ["use_adx_filter", "use_trend_filter", "use_volume_filter", "use_volatility_filter"]:
+        assert run_backtest(df, replace(Config(), **{switch: True}))["trades"] <= base
+    adx = add_indicators(df, Config())["adx"].dropna()
+    assert adx.between(0, 100).all()
+
+
+def test_breakeven_stop_moves_to_entry():
+    b = PaperBroker(100, fee_rate=0.0)
+    b.open("long", 0.001, 60000, 59000, 62000, breakeven_at=60500)
+    assert b.check_exits(high=60600, low=60100) is None
+    assert b.position.stop == 60000
+    pnl = b.check_exits(high=60100, low=59900)
+    assert pnl == 0.0 and b.trades[-1]["exit"] == 60000

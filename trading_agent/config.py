@@ -16,6 +16,27 @@ class Config:
     stop_atr_mult: float = 2.0      # stop-loss distance = 2 x ATR
     take_profit_atr_mult: float = 4.0  # 2:1 reward-to-risk
 
+    # --- Filters: ON/OFF switches (True = on). Turn on ONE at a time and test. ---
+    # 1. Skip choppy markets: only trade when ADX says there's a real trend.
+    use_adx_filter: bool = False
+    adx_period: int = 14
+    adx_min: float = 20.0
+    # 1b. Skip dead markets: only trade when volatility is at least normal.
+    use_volatility_filter: bool = False
+    min_atr_ratio: float = 0.8      # ATR must be >= 80% of its recent typical level
+    # 2. Only trade with the bigger trend (longs above the 200 EMA, shorts below).
+    use_trend_filter: bool = False
+    trend_ema: int = 200
+    # 4a. Wait one extra candle to confirm the crossover held.
+    use_confirmation: bool = False
+    # 4b. Only trade crossovers with above-average volume.
+    use_volume_filter: bool = False
+    volume_period: int = 20
+    # 5. Move the stop to the entry price once a trade is this many ATRs in profit.
+    use_breakeven_stop: bool = False
+    breakeven_trigger_atr: float = 1.0
+    # (3. Slower timeframe = change `bar` above, e.g. "15m" or "1H".)
+
     # --- Risk limits (the most important section) ---
     starting_balance: float = 100.0
     risk_per_trade: float = 0.01    # risk 1% of the account per trade

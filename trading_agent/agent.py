@@ -49,7 +49,7 @@ def main():
     print("Open dashboard.html in your browser to watch it live.")
     while True:
         try:
-            df = fetch_candles(cfg.symbol, cfg.bar, limit=200)
+            df = fetch_candles(cfg.symbol, cfg.bar, limit=400)
             closed = df.iloc[:-1]  # the newest candle is still forming; ignore it
             bar = closed.iloc[-1]
             broker.check_exits(bar["high"], bar["low"], bar["ts"])
@@ -67,12 +67,15 @@ def main():
                     print(f"  Claude sees: {last_read['bias']} ({last_read['confidence']:.0%}) - {last_read['notes']}")
 
                 sig = generate_signal(closed, cfg)
+                if sig.reason.startswith("filtered"):
+                    print(f"  signal skipped - {sig.reason}")
                 if not broker.position and sig.side != "none":
                     if vision and not vision_allows(sig.side, last_read):
                         print(f"  {sig.side} signal vetoed by chart read")
                     else:
                         qty = risk.position_size(equity, sig.price, sig.stop)
-                        broker.open(sig.side, qty, sig.price, sig.stop, sig.take_profit, bar["ts"])
+                        broker.open(sig.side, qty, sig.price, sig.stop, sig.take_profit, bar["ts"],
+                                    sig.breakeven_at)
                         print(f"  OPEN {sig.side} {qty:.6f} @ {sig.price:.2f} "
                               f"stop {sig.stop:.2f} target {sig.take_profit:.2f} ({sig.reason})")
 

@@ -27,6 +27,30 @@ python backtest.py              # backtest on the last day of real BTC data
 python agent.py                 # start paper trading with live prices
 ```
 
+## Filters (on/off switches)
+
+All in `config.py`, all **off** by default. Set one to `True` to turn it on.
+
+| Switch | What it does |
+|---|---|
+| `use_adx_filter` | Skips choppy, sideways markets (ADX below 20) |
+| `use_volatility_filter` | Skips unusually quiet markets |
+| `use_trend_filter` | Longs only above the 200 EMA, shorts only below |
+| `use_confirmation` | Waits one more candle to confirm the crossover held |
+| `use_volume_filter` | Only trades crossovers with above-average volume |
+| `use_breakeven_stop` | Moves the stop to the entry price once a trade is 1 ATR in profit |
+| `bar` | Timeframe, e.g. `"15m"` or `"1H"` instead of `"1m"` |
+
+Before switching anything on, compare them on real data:
+
+```bash
+python compare.py               # real BloFin history, 1m candles
+python compare.py --bar 15m     # try a slower timeframe
+```
+
+It splits the history into TUNE (first 70%) and CHECK (last 30%). Only trust a filter
+that beats the baseline in **both** columns with 30+ trades.
+
 ## Dashboard
 
 While `agent.py` runs, open `dashboard.html` (in the `trading_agent` folder) in your browser.

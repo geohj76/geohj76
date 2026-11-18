@@ -52,3 +52,30 @@ def synthetic_candles(n: int = 2000, start_price: float = 60000.0, seed: int = 7
         {"ts": ts, "open": open_, "high": high, "low": low, "close": close,
          "volume": rng.uniform(1, 50, n)}
     )
+
+
+def fetch_history(symbol: str = "BTC-USDT", bar: str = "1m", total: int = 10000) -> pd.DataFrame:
+    """Download up to `total` candles by paging backwards through BloFin history.
+
+    Uses BloFin's `after` parameter (return candles older than a timestamp).
+    Stops early if the exchange returns no older data.
+    """
+    frames, after = [], None
+    while sum(len(f) for f in frames) < total:
+        params = {"instId": symbol, "bar": bar, "limit": min(1440, total)}
+        if after is not None:
+            params["after"] = after
+        resp = requests.get(f"{BLOFIN_BASE}/api/v1/market/candles", params=params, timeout=10)
+        resp.raise_for_status()
+        page = parse_blofin_candles(resp.json())
+        if page.empty:
+            break
+        oldest = int(page["ts"].iloc[0].value // 1_000_000)
+        if after is not None and oldest >= after:
+            break  # no progress: the exchange ignored paging
+        frames.append(page)
+        after = oldest
+    if not frames:
+        raise RuntimeError("No candles returned")
+    df = pd.concat(frames).drop_duplicates("ts").sort_values("ts").reset_index(drop=True)
+    return df.tail(total).reset_index(drop=True)

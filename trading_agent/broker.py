@@ -17,6 +17,7 @@ class Position:
     entry: float
     stop: float
     take_profit: float
+    breakeven_at: float | None = None  # once price reaches this, stop moves to entry
 
 
 class PaperBroker:
@@ -35,11 +36,12 @@ class PaperBroker:
         direction = 1 if p.side == "long" else -1
         return self.balance + direction * (price - p.entry) * p.qty
 
-    def open(self, side: str, qty: float, price: float, stop: float, take_profit: float, ts=None):
+    def open(self, side: str, qty: float, price: float, stop: float, take_profit: float, ts=None,
+             breakeven_at: float | None = None):
         if self.position or qty <= 0:
             return
         self.balance -= qty * price * self.fee_rate
-        self.position = Position(side, qty, price, stop, take_profit)
+        self.position = Position(side, qty, price, stop, take_profit, breakeven_at)
         self._log(ts, "open", side, qty, price, 0.0)
 
     def close(self, price: float, ts=None, reason: str = "") -> float:
@@ -61,14 +63,18 @@ class PaperBroker:
             return None
         if p.side == "long":
             if low <= p.stop:
-                return self.close(p.stop, ts, "stop")
+                return self.close(p.stop, ts, "breakeven" if p.stop == p.entry else "stop")
             if high >= p.take_profit:
                 return self.close(p.take_profit, ts, "target")
+            if p.breakeven_at is not None and high >= p.breakeven_at:
+                p.stop, p.breakeven_at = max(p.stop, p.entry), None
         else:
             if high >= p.stop:
-                return self.close(p.stop, ts, "stop")
+                return self.close(p.stop, ts, "breakeven" if p.stop == p.entry else "stop")
             if low <= p.take_profit:
                 return self.close(p.take_profit, ts, "target")
+            if p.breakeven_at is not None and low <= p.breakeven_at:
+                p.stop, p.breakeven_at = min(p.stop, p.entry), None
         return None
 
     def _log(self, ts, action, side, qty, price, pnl):

@@ -13,7 +13,7 @@ import pandas as pd
 from broker import PaperBroker
 from config import Config
 from risk import RiskManager
-from strategy import add_indicators, generate_signal
+from strategy import add_indicators, signal_at, warmup_bars
 
 
 def run_backtest(df: pd.DataFrame, cfg: Config, log_file: str | None = None) -> dict:
@@ -21,7 +21,7 @@ def run_backtest(df: pd.DataFrame, cfg: Config, log_file: str | None = None) -> 
     risk = RiskManager(cfg)
     df = add_indicators(df, cfg)
     equity_curve = []
-    warmup = cfg.slow_ema + cfg.atr_period
+    warmup = warmup_bars(cfg)
 
     for i in range(warmup, len(df)):
         bar = df.iloc[i]
@@ -36,10 +36,10 @@ def run_backtest(df: pd.DataFrame, cfg: Config, log_file: str | None = None) -> 
         if broker.position:
             continue
 
-        sig = generate_signal(df.iloc[: i + 1], cfg)
+        sig = signal_at(df, i, cfg)
         if sig.side != "none":
             qty = risk.position_size(equity, sig.price, sig.stop)
-            broker.open(sig.side, qty, sig.price, sig.stop, sig.take_profit, bar["ts"])
+            broker.open(sig.side, qty, sig.price, sig.stop, sig.take_profit, bar["ts"], sig.breakeven_at)
 
     if broker.position:
         broker.close(df["close"].iloc[-1], df["ts"].iloc[-1], "end")
