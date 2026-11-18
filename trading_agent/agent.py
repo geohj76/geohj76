@@ -7,6 +7,7 @@ Every `poll_seconds` it:
   4. asks the strategy for a signal
   5. optionally screenshots your chart and asks Claude for a second opinion
   6. sizes and places the trade on the paper broker, and logs it to trades.csv
+  7. refreshes dashboard.html so you can watch it in your browser
 
     python agent.py            # price feed only
     python agent.py --vision   # also let Claude look at your screen
@@ -20,6 +21,7 @@ import time
 
 from broker import PaperBroker
 from config import Config
+from dashboard import write_dashboard
 from data import fetch_candles
 from risk import RiskManager
 from strategy import generate_signal
@@ -44,6 +46,7 @@ def main():
     poll = 0
 
     print(f"Paper-trading {cfg.symbol} on {cfg.bar} candles with ${cfg.starting_balance:.2f} fake money.")
+    print("Open dashboard.html in your browser to watch it live.")
     while True:
         try:
             df = fetch_candles(cfg.symbol, cfg.bar, limit=200)
@@ -76,6 +79,7 @@ def main():
             pos = broker.position
             status = f"{pos.side} @ {pos.entry:.2f}" if pos else "flat"
             print(f"[{bar['ts']:%H:%M}] price {df['close'].iloc[-1]:.2f} | equity ${equity:.2f} | {status}")
+            write_dashboard(cfg.log_file, starting_balance=cfg.starting_balance)
         except KeyboardInterrupt:
             raise
         except Exception as e:  # network blips etc. - keep running

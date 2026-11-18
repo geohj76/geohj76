@@ -62,3 +62,15 @@ def test_vision_parsing_and_veto():
     assert not vision_allows("long", read)
     assert vision_allows("short", read)
     assert parse_vision_reply("garbage")["bias"] == "neutral"
+
+
+def test_dashboard_builds(tmp_path):
+    from dashboard import write_dashboard
+    log = tmp_path / "t.csv"
+    run_backtest(synthetic_candles(800), Config(), str(log))
+    out = write_dashboard(str(log), str(tmp_path / "d.html"), 100.0)
+    page = open(out).read()
+    assert "Account balance over time" in page and "const DATA" in page
+    # Empty log still renders
+    empty = write_dashboard(str(tmp_path / "missing.csv"), str(tmp_path / "e.html"), 100.0)
+    assert "No closed trades yet" in open(empty).read()

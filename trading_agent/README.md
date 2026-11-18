@@ -13,6 +13,7 @@ A beginner-friendly crypto futures trading agent for BTC-USDT on BloFin.
 | Broker | `broker.py` | Simulated fills with fees; logs every trade to `trades.csv` |
 | Screen vision | `vision.py` | Optional: screenshots your chart and asks Claude for a read. It can only **veto** a trade, never start one |
 | Agent loop | `agent.py` | Ties it all together every 30 seconds |
+| Dashboard | `dashboard.py` | Builds `dashboard.html`: balance, win rate, biggest drop, a balance chart and recent trades |
 | Backtest | `backtest.py` | Tests the strategy on past data |
 
 ## Setup (on your own computer)
@@ -25,6 +26,14 @@ python backtest.py --synthetic  # backtest on fake data (offline)
 python backtest.py              # backtest on the last day of real BTC data
 python agent.py                 # start paper trading with live prices
 ```
+
+## Dashboard
+
+While `agent.py` runs, open `dashboard.html` (in the `trading_agent` folder) in your browser.
+It reloads itself every 30 seconds. Hover over the chart to see your balance after each trade.
+
+- `python backtest.py --dashboard` builds `backtest_dashboard.html` for a backtest
+- `python dashboard.py` rebuilds the dashboard from `trades.csv` any time
 
 ### Turn on screen vision (optional)
 

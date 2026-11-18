@@ -1,3 +1,7 @@
 trades.csv
 __pycache__/
 .pytest_cache/
+dashboard.html
+backtest_dashboard.html
+backtest_trades.csv
+*.tmp
